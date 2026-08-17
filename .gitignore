@@ -1,0 +1,12 @@
+# Compiled provider binary
+terraform-provider-onepassword
+# goreleaser output
+dist/
+# Terraform working files (e.g. local dev/e2e)
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+crash.log
+# Local dev override
+*.tfrc
