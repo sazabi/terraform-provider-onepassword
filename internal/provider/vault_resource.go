@@ -133,15 +133,37 @@ func (r *vaultResource) Read(ctx context.Context, req resource.ReadRequest, resp
 }
 
 func (r *vaultResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var plan vaultResourceModel
+	var plan, state vaultResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	if err := r.client.EditVault(ctx, plan.ID.ValueString(), plan.Name.ValueString(), plan.Description.ValueString(), plan.Icon.ValueString()); err != nil {
-		resp.Diagnostics.AddError("Error updating vault", err.Error())
-		return
+	// Only call `op vault edit` for the vault-side fields that actually changed.
+	// delete_protection is a provider-side guard with no `op` equivalent, so a
+	// change to it alone must NOT trigger an edit. This also avoids sending
+	// --name for vaults 1Password refuses to rename (e.g. built-in vaults like
+	// "Employee"), where a redundant same-name rename errors.
+	var name, description, icon string
+	edit := false
+	if !plan.Name.Equal(state.Name) {
+		name = plan.Name.ValueString()
+		edit = true
+	}
+	if !plan.Description.Equal(state.Description) {
+		description = plan.Description.ValueString()
+		edit = true
+	}
+	if !plan.Icon.Equal(state.Icon) {
+		icon = plan.Icon.ValueString()
+		edit = true
+	}
+	if edit {
+		if err := r.client.EditVault(ctx, plan.ID.ValueString(), name, description, icon); err != nil {
+			resp.Diagnostics.AddError("Error updating vault", err.Error())
+			return
+		}
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
